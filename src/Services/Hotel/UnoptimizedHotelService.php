@@ -2,6 +2,7 @@
 
 namespace App\Services\Hotel;
 
+use App\Common\PDOSingleton;
 use App\Common\FilterException;
 use App\Common\SingletonTrait;
 use App\Common\Timers;
@@ -38,8 +39,11 @@ class UnoptimizedHotelService extends AbstractHotelService {
    * @noinspection PhpUnnecessaryLocalVariableInspection
    */
   protected function getDB () : PDO {
-    $pdo = new PDO( "mysql:host=db;dbname=tp;charset=utf8mb4", "root", "root" );
-    return $pdo;
+    $timer = Timers::getInstance();
+    $timerId = $timer->startTimer('getDB');
+    $connect = PDOSingleton::getInstance();
+    $timer->endTimer('getDB', $timerId);
+    return $connect;
   }
   
   
@@ -79,24 +83,42 @@ class UnoptimizedHotelService extends AbstractHotelService {
    * @return array
    * @noinspection PhpUnnecessaryLocalVariableInspection
    */
+
+
+
+   //etape 1 -> requete pour récupérer toutes les metas d'un hotel
+   //etape 2 -> apres je dois formater le retour pdo en un tableau clé-valeurs
+   //etape 3 -> je remplace les valeurs du tableau $metaDatas par des valeurs du tableau obtenu dans l'etape2
   protected function getMetas ( HotelEntity $hotel ) : array {
-    $timer = Timers::getInstance();
-    $timerId = $timer->startTimer('getMetas');
+
+    $idConnexion = $this->getDB();
+
+    $idHotel = $hotel->getId();
+
+    $requete = $idConnexion->prepare($requete = 'SELECT meta_key, meta_value FROM wp_usermeta WHERE user_id = :idHotel');
+    $requete->bindParam('idHotel', $idHotel);
+    $requete->execute();
+    $resultats = $requete->fetchAll(PDO::FETCH_ASSOC);
+
+    $results = [];
+
+    foreach ($resultats as $resultat) {
+      $results[$resultat['meta_key']] = $resultat['meta_value'];
+  }
     $metaDatas = [
       'address' => [
-        'address_1' => $this->getMeta( $hotel->getId(), 'address_1' ),
-        'address_2' => $this->getMeta( $hotel->getId(), 'address_2' ),
-        'address_city' => $this->getMeta( $hotel->getId(), 'address_city' ),
-        'address_zip' => $this->getMeta( $hotel->getId(), 'address_zip' ),
-        'address_country' => $this->getMeta( $hotel->getId(), 'address_country' ),
+        'address_1' => isset($results['address_1']),
+        'address_2' => isset($results['address_2']),
+        'address_city' => isset($results['address_city']),
+        'address_zip' => isset($results['address_zip']),
+        'address_country' => isset($results['address_country']),
       ],
-      'geo_lat' =>  $this->getMeta( $hotel->getId(), 'geo_lat' ),
-      'geo_lng' =>  $this->getMeta( $hotel->getId(), 'geo_lng' ),
-      'coverImage' =>  $this->getMeta( $hotel->getId(), 'coverImage' ),
-      'phone' =>  $this->getMeta( $hotel->getId(), 'phone' ),
+      'geo_lat' => isset($results['geo_lat']),
+      'geo_lng' => isset($results['geo_lng']),
+      'coverImage' => $results['coverImage'],
+      'phone' => isset($results['phone']),
     ];
 
-    $timer->endTimer('getMetas', $timerId);
     return $metaDatas;
   }
   
